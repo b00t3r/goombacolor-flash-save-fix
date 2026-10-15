@@ -1,10 +1,35 @@
 # Goomba Color – Flash Save Fix
 
-I created this fork because Lesserkuma’s batteryless-save support could not save progress on the reproduction cartridge I had on hand. That cartridge uses Flash for its save device instead of writable SRAM: saves could be loaded and appear to work, but the old save returned after a reboot.
+I created this fork because Lesserkuma’s batteryless-save support could not save progress on the reproduction cartridge I had on hand. My cartridge uses Flash for its save device instead of writable SRAM: saves could be loaded and appear to work, but the old save returned after a reboot.
 
 This fork bypasses that save device and backs up Goomba’s internal Game Boy save image directly to unused ROM Flash, fixing the stale-save problem on this hardware.
 
-I used a code assistant in this project. The updated build was tested on real hardware.
+When using in-game saves, save from the Game Boy game first, then open the Goomba menu and save with "A".
+Save states capture the live emulator state and can be saved separately.
+
+I used a code assistant in this project. The build was tested on real hardware.
+
+## Using the built ROM
+
+Append a legally dumped Game Boy ROM to `goomba.gba` to make a GBA ROM:
+
+```sh
+cat goomba.gba game.gb > game-goomba.gba
+```
+
+For a Game Boy Color game, use its `.gbc` file instead:
+
+```sh
+cat goomba.gba game.gbc > game-goomba.gba
+```
+
+On Windows PowerShell, use:
+
+```powershell
+cmd /c copy /b goomba.gba+game.gb game-goomba.gba
+```
+
+Flash the resulting `game-goomba.gba` to the cartridge.
 
 ## Original Lesserkuma documentation
 
