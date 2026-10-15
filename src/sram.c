@@ -235,6 +235,13 @@ void getsram()	//copy GBA sram to sram_copy
 	}
 	
 	u8 *sram = MEM_SRAM;
+#if FLASHCART
+	// Batteryless carts may expose Flash rather than writable SRAM at
+	// 0x0E000000. Load the persistent Goomba save image directly from the
+	// ROM-Flash backup area instead of relying on that device as a staging RAM.
+	if (flash_save_valid())
+		sram = (u8*)AGB_ROM + flash_sram_area;
+#endif
 	u8 *sramCopy = sram_copy;
 	u32 *sramCopy32 = (u32*)sramCopy;
 	
@@ -1167,9 +1174,12 @@ restart:
 		if(i>=0)
 		{
 			int save_size=0x2000;
+			u8 *save_source = MEM_SRAM+save_start;
+			if (called_from==1 && chk==sram_owner)
+				save_source = XGB_SRAM;
 
 			memcpy(compressed_save,sh,sizeof(stateheader));//use old info, in case the rom for this sram is gone and we can't look up its name.
-			lzo1x_1_compress(MEM_SRAM+save_start,save_size,compressed_save+sizeof(stateheader),&compressedsize,lzo_workspace);	//workspace needs to be 64k
+			lzo1x_1_compress(save_source,save_size,compressed_save+sizeof(stateheader),&compressedsize,lzo_workspace);	//workspace needs to be 64k
 			sh=(stateheader*)current_save_file;
 			sh->size=(compressedsize+sizeof(stateheader)+3)&~3;	//size of compressed state+header, word aligned
 			sh->checksum = cfg->sram_checksum;
@@ -1506,7 +1516,7 @@ void writeconfig()
 	i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);
 	if(i<0) {//make new config
 		memcpy(compressed_save,&configtemplate,sizeof(configdata));
-		cfg=current_save_file;
+		cfg=(configdata*)current_save_file;
 	}
 //	cfg->bordercolor=bcolor;					//store current border type
 	cfg->palettebank=palettebank;				//store current DMG palette
@@ -1826,5 +1836,3 @@ int loadstate2(int romNumber, stateheader *sh)
 
 
 #endif
-
-

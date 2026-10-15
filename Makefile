@@ -123,7 +123,7 @@ else
 endif
 #---------------------------------------------------------------------------------
 
-export OFILES	:= $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o) $(DATA1:.lz77=.o) $(DATA2:.bin=.o) $(DATA3:.gba=.o)
+export OFILES	:= $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o) $(DATA1:.lz77=.lz77.o) $(DATA2:.bin=.bin.o) $(DATA3:.gba=.gba.o)
 
 #---------------------------------------------------------------------------------
 # build a list of include paths

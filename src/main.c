@@ -37,6 +37,15 @@ u32 total_rom_size = 0;
 u32 flash_size = 0;
 u32 flash_sram_area = 0;
 u8 flash_type = 0;
+
+int flash_save_valid()
+{
+	if (flash_type == 0 || flash_sram_area == 0)
+		return 0;
+
+	u32 id = *(u32 *)(AGB_ROM + flash_sram_area);
+	return id == STATEID || id == STATEID2;
+}
 #endif
 
 //82048 is an upper bound on the save state size
@@ -351,8 +360,10 @@ void C_entry()
 				while (1) waitframe();
 			}
 			
-			// Finally, restore the SRAM data and proceed.
-			bytecopy(AGB_SRAM, ((u8*)AGB_ROM+flash_sram_area), AGB_SRAM_SIZE);
+			// Restore a previously saved ROM-Flash image when one exists.
+			// Otherwise leave normal cartridge SRAM untouched.
+			if (flash_save_valid())
+				bytecopy(AGB_SRAM, ((u8*)AGB_ROM+flash_sram_area), AGB_SRAM_SIZE);
 		
 		} else { // Emulator mode?
 			if (flash_sram_area == 0) {
@@ -373,7 +384,9 @@ void C_entry()
 		}
 		// Failsafe: Holding SELECT+UP+B on boot will invalidate SRAM
 		if (((*(u16 *)(0x4000130))) == 0x03B9) {
-			*(u32 *)AGB_SRAM = 0xFFFFFFFF;
+			memset8(AGB_SRAM, 0xFF, AGB_SRAM_SIZE);
+			if (flash_type > 0)
+				save_sram_FLASH();
 		}
 #endif
 		
@@ -618,7 +631,7 @@ u32 get_flash_type() {
 // Must run in EWRAM because ROM data is
 // not visible to the system while erasing/writing.
 __attribute__((section(".ewram")))
-void flash_write(u8 flash_type, u32 sa)
+void flash_write(u8 flash_type, u32 sa, const u8 *source)
 {
 	if (flash_type == 0) return;
 	u16 ie = REG_IE;
@@ -643,7 +656,7 @@ void flash_write(u8 flash_type, u32 sa)
 		// Write data
 		for (int i=0; i<AGB_SRAM_SIZE; i+=2) {
 			_FLASH_WRITE(sa+i, 0x40);
-			_FLASH_WRITE(sa+i, (*(u8 *)(AGB_SRAM+i+1)) << 8 | (*(u8 *)(AGB_SRAM+i)));
+			_FLASH_WRITE(sa+i, (source[i+1] << 8) | source[i]);
 			while (1) {
 				__asm("nop");
 				if (*(((u16 *)AGB_ROM)+(sa/2)) == 0x80) {
@@ -675,10 +688,10 @@ void flash_write(u8 flash_type, u32 sa)
 			_FLASH_WRITE(0xAAA, 0xA9);
 			_FLASH_WRITE(0x555, 0x56);
 			_FLASH_WRITE(0xAAA, 0xA0);
-			_FLASH_WRITE(sa+i, (*(u8 *)(AGB_SRAM+i+1)) << 8 | (*(u8 *)(AGB_SRAM+i)));
+			_FLASH_WRITE(sa+i, (source[i+1] << 8) | source[i]);
 			while (1) {
 				__asm("nop");
-				if (*(((u16 *)AGB_ROM)+((sa+i)/2)) == ((*(u8 *)(AGB_SRAM+i+1)) << 8 | (*(u8 *)(AGB_SRAM+i)))) {
+				if (*(((u16 *)AGB_ROM)+((sa+i)/2)) == ((source[i+1] << 8) | source[i])) {
 					break;
 				}
 			}
@@ -707,10 +720,10 @@ void flash_write(u8 flash_type, u32 sa)
 			_FLASH_WRITE(0xAAA, 0xAA);
 			_FLASH_WRITE(0x555, 0x55);
 			_FLASH_WRITE(0xAAA, 0xA0);
-			_FLASH_WRITE(sa+i, (*(u8 *)(AGB_SRAM+i+1)) << 8 | (*(u8 *)(AGB_SRAM+i)));
+			_FLASH_WRITE(sa+i, (source[i+1] << 8) | source[i]);
 			while (1) {
 				__asm("nop");
-				if (*(((u16 *)AGB_ROM)+((sa+i)/2)) == ((*(u8 *)(AGB_SRAM+i+1)) << 8 | (*(u8 *)(AGB_SRAM+i)))) {
+				if (*(((u16 *)AGB_ROM)+((sa+i)/2)) == ((source[i+1] << 8) | source[i])) {
 					break;
 				}
 			}
@@ -744,7 +757,7 @@ void flash_write(u8 flash_type, u32 sa)
 			}
 			_FLASH_WRITE(sa+c, 0x1FF);
 			for (int i=0; i<1024; i+=2) {
-				_FLASH_WRITE(sa+c+i, (*(u8 *)(AGB_SRAM+c+i+1)) << 8 | (*(u8 *)(AGB_SRAM+c+i)));
+				_FLASH_WRITE(sa+c+i, (source[c+i+1] << 8) | source[c+i]);
 			}
 			_FLASH_WRITE(sa+c, 0xD0);
 			while (1) {
@@ -762,10 +775,20 @@ void flash_write(u8 flash_type, u32 sa)
 	//resume_interrupts();
 }
 
-void save_sram_FLASH()
+int save_sram_FLASH()
 {
-	if (flash_type == 0) return;
-	flash_write(flash_type, flash_sram_area);
+	if (flash_type == 0) return 0;
+	const u8 *source = sram_copy ? sram_copy : AGB_SRAM;
+	flash_write(flash_type, flash_sram_area, source);
+
+	// Verify the actual Flash contents.  The old code reported "Saving..."
+	// without checking whether the erase/program operation succeeded.
+	for (u32 i = 0; i < AGB_SRAM_SIZE; i++) {
+		if (((u8 *)AGB_ROM)[flash_sram_area + i] != source[i]) {
+			return 0;
+		}
+	}
+	return 1;
 }
 #endif
 

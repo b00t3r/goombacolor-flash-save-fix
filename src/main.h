@@ -21,9 +21,12 @@ extern int rom_filesize;
 	#define AGB_SRAM_SIZE SRAM_SIZE*1024
 	#define _FLASH_WRITE(pa, pd) { *(((u16 *)AGB_ROM)+((pa)/2)) = pd; __asm("nop"); }
 	extern u8 flash_type;
+	extern u32 flash_sram_area;
+	extern u8 *sram_copy;
 	extern u32 get_flash_type();
-	void flash_write(u8 flash_type, u32 sa);
-	void save_sram_FLASH();
+	int flash_save_valid();
+	void flash_write(u8 flash_type, u32 sa, const u8 *source);
+	int save_sram_FLASH();
 #endif
 
 extern u32 max_multiboot_size;
